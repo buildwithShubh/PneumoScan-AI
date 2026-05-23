@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.vscode/
+venv/
+env/
+
+chest_xray/
+
+static/uploads/*
+static/results/*
+
+logs/
+
+tempCodeRunnerFile.py

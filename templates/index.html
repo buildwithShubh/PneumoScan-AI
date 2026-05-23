@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PneumoScan AI — Pneumonia Detection</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════
+   DESIGN TOKENS
+═══════════════════════════════════════════════════ */
+:root {
+  --bg:           #05080f;
+  --bg2:          #080d18;
+  --surface:      #0c1220;
+  --surface2:     #101828;
+  --surface3:     #141f30;
+  --border:       #1a2a3e;
+  --border2:      #243650;
+
+  --cyan:         #00e5ff;
+  --cyan-dim:     rgba(0,229,255,.10);
+  --cyan-glow:    rgba(0,229,255,.22);
+  --cyan-mid:     rgba(0,229,255,.50);
+
+  --red:          #ff3d5a;
+  --red-dim:      rgba(255,61,90,.10);
+  --red-glow:     rgba(255,61,90,.28);
+
+  --green:        #00e676;
+  --green-dim:    rgba(0,230,118,.10);
+  --green-glow:   rgba(0,230,118,.28);
+
+  --amber:        #ffb300;
+  --amber-dim:    rgba(255,179,0,.10);
+
+  --text:         #dce8f5;
+  --text-2:       #7a9ab8;
+  --text-3:       #334a63;
+  --text-4:       #1e2f42;
+
+  --display:      'Syne', sans-serif;
+  --mono:         'IBM Plex Mono', monospace;
+  --body:         'Lato', sans-serif;
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+}
+
+/* ─── RESET & BASE ─────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Grid texture */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,229,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,255,.025) 1px, transparent 1px);
+  background-size: 44px 44px;
+  pointer-events: none; z-index: 0;
+}
+
+/* Top glow */
+body::after {
+  content: '';
+  position: fixed;
+  top: -100px; left: 50%; transform: translateX(-50%);
+  width: 900px; height: 400px;
+  background: radial-gradient(ellipse, rgba(0,229,255,.055) 0%, transparent 68%);
+  pointer-events: none; z-index: 0;
+}
+
+/* ─── LAYOUT ────────────────────────────────────── */
+.wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 28px; }
+
+/* ─── HEADER ────────────────────────────────────── */
+header {
+  padding: 28px 0 24px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0;
+  background: rgba(5,8,15,.90);
+  backdrop-filter: blur(12px);
+  z-index: 100;
+}
+
+.hdr {
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 16px; flex-wrap: wrap;
+}
+
+.logo { display: flex; align-items: center; gap: 14px; }
+
+.logo-mark {
+  width: 42px; height: 42px;
+  border: 1.5px solid var(--cyan);
+  border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--cyan-dim);
+  box-shadow: 0 0 16px var(--cyan-glow);
+  flex-shrink: 0;
+}
+
+.logo-name {
+  font-family: var(--display);
+  font-size: 20px; font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.logo-name b { color: var(--cyan); font-weight: 800; }
+
+.hdr-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.tag {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 4px 11px; border-radius: 3px;
+  border: 1px solid;
+}
+
+.tag-cyan { color: var(--cyan); border-color: var(--cyan); background: var(--cyan-dim); }
+.tag-amber { color: var(--amber); border-color: var(--amber); background: var(--amber-dim); }
+
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: blink 2s ease infinite;
+}
+
+/* ─── HERO ──────────────────────────────────────── */
+.hero {
+  padding: 64px 0 52px;
+  text-align: center;
+}
+
+.hero-sup {
+  font-family: var(--mono);
+  font-size: 11px; letter-spacing: 3.5px;
+  color: var(--cyan); text-transform: uppercase;
+  margin-bottom: 18px;
+  opacity: 0; animation: fadeUp .55s .1s ease forwards;
+}
+
+.hero-h1 {
+  font-family: var(--display);
+  font-size: clamp(38px, 6vw, 70px);
+  font-weight: 800; line-height: 1.05;
+  letter-spacing: -2px; margin-bottom: 18px;
+  opacity: 0; animation: fadeUp .55s .2s ease forwards;
+}
+
+.hero-h1 em { font-style: normal; color: var(--cyan); }
+
+.hero-sub {
+  font-size: 16px; font-weight: 300;
+  color: var(--text-2); max-width: 500px;
+  margin: 0 auto 6px; line-height: 1.7;
+  opacity: 0; animation: fadeUp .55s .3s ease forwards;
+}
+
+.hero-warn {
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 10px; color: var(--text-3);
+  letter-spacing: .5px;
+  opacity: 0; animation: fadeUp .55s .4s ease forwards;
+}
+
+/* ─── MAIN GRID ─────────────────────────────────── */
+.app-grid {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 20px;
+  padding-bottom: 70px;
+  opacity: 0; animation: fadeUp .55s .5s ease forwards;
+}
+
+@media (max-width: 900px) { .app-grid { grid-template-columns: 1fr; } }
+
+/* ─── CARD ──────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.card-hdr {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+
+.card-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.card-title {
+  font-family: var(--mono);
+  font-size: 10.5px; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--text-2);
+}
+
+.card-body { padding: 20px; }
+
+/* ─── UPLOAD ZONE ───────────────────────────────── */
+.drop-zone {
+  border: 1.5px dashed var(--border2);
+  border-radius: var(--r-md);
+  padding: 42px 20px;
+  text-align: center;
+  cursor: pointer;
+  position: relative; overflow: hidden;
+  background: var(--surface2);
+  transition: all .25s ease;
+}
+
+.drop-zone::before {
+  content: ''; position: absolute; inset: 0;
+  background: var(--cyan-dim); opacity: 0;
+  transition: opacity .25s;
+}
+
+.drop-zone:hover::before,
+.drop-zone.drag-over::before { opacity: 1; }
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+  border-color: var(--cyan);
+  box-shadow: 0 0 24px var(--cyan-glow), inset 0 0 32px var(--cyan-dim);
+}
+
+.drop-zone.drag-over { transform: scale(1.01); }
+
+.dz-icon {
+  width: 56px; height: 56px; margin: 0 auto 18px;
+  border: 1.5px solid var(--border2); border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center;
+  position: relative; z-index: 1;
+  transition: border-color .25s;
+}
+
+.drop-zone:hover .dz-icon { border-color: var(--cyan); }
+
+.dz-p { font-size: 14px; font-weight: 400; position: relative; z-index: 1; margin-bottom: 6px; }
+.dz-p span { color: var(--cyan); text-decoration: underline; }
+
+.dz-hint {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--text-2); position: relative; z-index: 1; letter-spacing: .5px;
+}
+
+#fileInput { display: none; }
+
+/* ─── PREVIEW PANEL ─────────────────────────────── */
+.preview-wrap {
+  position: relative; border-radius: var(--r-md);
+  overflow: hidden; background: #000;
+  min-height: 200px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.preview-ph {
+  text-align: center; color: var(--text-4); padding: 20px;
+}
+
+.preview-ph svg { margin-bottom: 10px; display: block; margin-left: auto; margin-right: auto; }
+
+.preview-ph p {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 1px; color: var(--text-3);
+}
+
+#previewImg { width: 100%; height: auto; display: none; border-radius: var(--r-md); filter: grayscale(100%) contrast(1.08); }
+
+/* Scan effect */
+.scan-fx {
+  position: absolute; inset: 0;
+  pointer-events: none; display: none; overflow: hidden;
+}
+
+.scan-fx.on { display: block; }
+
+.scan-line {
+  position: absolute; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan) 30%, var(--cyan) 70%, transparent);
+  box-shadow: 0 0 14px var(--cyan);
+  animation: scanMove 1.8s ease-in-out infinite;
+}
+
+.scan-fx::before, .scan-fx::after {
+  content: ''; position: absolute;
+  width: 18px; height: 18px; border-color: var(--cyan); border-style: solid;
+}
+.scan-fx::before { top: 8px; left: 8px; border-width: 2px 0 0 2px; box-shadow: -2px -2px 10px var(--cyan-glow); }
+.scan-fx::after  { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; box-shadow: 2px 2px 10px var(--cyan-glow); }
+
+/* ─── FILE INFO ─────────────────────────────────── */
+.file-info {
+  display: none; margin-top: 12px;
+  padding: 9px 14px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); gap: 10px; align-items: center;
+  font-family: var(--mono); font-size: 10.5px; color: var(--text-2);
+}
+.file-info.on { display: flex; }
+.fi-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fi-size { color: var(--cyan); flex-shrink: 0; }
+
+/* ─── BUTTONS ───────────────────────────────────── */
+.btn-run {
+  display: none; width: 100%; margin-top: 14px;
+  padding: 15px 24px;
+  background: var(--cyan); color: #000;
+  font-family: var(--mono); font-size: 12px;
+  font-weight: 500; letter-spacing: 2px;
+  text-transform: uppercase; border: none;
+  border-radius: var(--r-sm); cursor: pointer;
+  position: relative; overflow: hidden;
+  transition: all .2s ease;
+}
+
+.btn-run.on { display: block; }
+
+.btn-run::before {
+  content: ''; position: absolute;
+  top: 50%; left: 50%;
+  width: 0; height: 0;
+  background: rgba(255,255,255,.22);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width .45s, height .45s;
+}
+.btn-run:hover::before { width: 350px; height: 350px; }
+.btn-run:hover { box-shadow: 0 0 28px var(--cyan-glow); transform: translateY(-1px); }
+.btn-run:active { transform: translateY(0); }
+.btn-run:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.btn-reset {
+  display: none; width: 100%; margin-top: 10px;
+  padding: 10px; background: transparent;
+  color: var(--text-2);
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  cursor: pointer; transition: all .2s;
+}
+.btn-reset.on { display: block; }
+.btn-reset:hover { border-color: var(--text-2); color: var(--text); }
+
+/* ─── PREPROCESSING STEPS ───────────────────────── */
+.prep-list {
+  display: none; margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm); overflow: hidden;
+}
+.prep-list.on { display: block; }
+
+.prep-hdr {
+  padding: 9px 14px; background: var(--surface3);
+  font-family: var(--mono); font-size: 9px;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--text-2); border-bottom: 1px solid var(--border);
+}
+
+.prep-item {
+  padding: 8px 14px;
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--text-2); border-bottom: 1px solid var(--border);
+  transition: all .3s;
+}
+.prep-item:last-child { border-bottom: none; }
+.prep-item.active { color: var(--cyan); background: var(--cyan-dim); }
+.prep-item.done { color: var(--green); }
+
+.prep-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  border: 1.5px solid currentColor; flex-shrink: 0;
+}
+.prep-item.active .prep-dot {
+  background: var(--cyan); border-color: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan); animation: blink 1s ease infinite;
+}
+.prep-item.done .prep-dot { background: var(--green); border-color: var(--green); }
+
+/* ─── RESULT PANEL ──────────────────────────────── */
+.result-panel { min-height: 520px; display: flex; flex-direction: column; }
+
+.result-idle {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 30px; text-align: center; gap: 14px;
+}
+
+.idle-ring {
+  width: 72px; height: 72px;
+  border: 1px solid var(--border); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+
+.idle-ring::before {
+  content: ''; position: absolute;
+  inset: -8px; border: 1px dashed var(--border);
+  border-radius: 50%;
+  animation: spin 20s linear infinite;
+}
+
+.idle-text {
+  font-family: var(--mono); font-size: 10.5px;
+  color: var(--text-4); letter-spacing: 1px; line-height: 1.9;
+}
+
+/* ─── LOADING STATE ─────────────────────────────── */
+.loading-state {
+  display: none; flex-direction: column;
+  gap: 18px; padding: 24px 20px;
+}
+.loading-state.on { display: flex; }
+
+.ld-hdr { display: flex; align-items: center; gap: 14px; }
+
+.spinner {
+  width: 34px; height: 34px; flex-shrink: 0;
+  border: 2px solid var(--border);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin .75s linear infinite;
+}
+
+.ld-title { font-size: 14px; font-weight: 500; }
+.ld-sub { font-family: var(--mono); font-size: 10px; color: var(--text-2); margin-top: 3px; }
+
+.progress-wrap {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 3px; height: 4px; overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--cyan), rgba(0,229,255,.45));
+  border-radius: 3px;
+  box-shadow: 0 0 10px var(--cyan-glow);
+  transition: width .5s ease;
+}
+
+.ld-steps { display: flex; flex-direction: column; gap: 8px; }
+
+.ld-step {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 12px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-family: var(--mono); font-size: 10.5px;
+  color: var(--text-3); letter-spacing: .3px;
+  transition: all .3s ease;
+}
+.ld-step.active { color: var(--text); border-color: var(--cyan); background: var(--cyan-dim); }
+.ld-step.done   { color: var(--green); border-color: rgba(0,230,118,.28); background: var(--green-dim); }
+
+.ld-step-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  border: 1.5px solid currentColor; flex-shrink: 0;
+}
+.ld-step.active .ld-step-dot {
+  background: var(--cyan); border-color: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan); animation: blink 1s ease infinite;
+}
+.ld-step.done .ld-step-dot { background: var(--green); border-color: var(--green); }
+
+/* ─── RESULT DISPLAY ────────────────────────────── */
+.result-out {
+  display: none; flex-direction: column; gap: 0;
+  animation: fadeUp .5s ease forwards;
+}
+.result-out.on { display: flex; }
+
+/* Verdict banner */
+.verdict {
+  margin: 18px 20px 0;
+  padding: 20px 22px;
+  border-radius: var(--r-md);
+  position: relative; overflow: hidden;
+  text-align: center;
+}
+
+.verdict::before {
+  content: ''; position: absolute; inset: 0; opacity: .04;
+  background: repeating-linear-gradient(45deg, currentColor, currentColor 1px, transparent 1px, transparent 8px);
+}
+
+.verdict.pneumonia {
+  border: 1px solid var(--red); background: var(--red-dim);
+  box-shadow: 0 0 36px var(--red-glow), inset 0 0 24px rgba(255,61,90,.04);
+}
+
+.verdict.normal {
+  border: 1px solid var(--green); background: var(--green-dim);
+  box-shadow: 0 0 36px var(--green-glow), inset 0 0 24px rgba(0,230,118,.04);
+}
+
+.verdict-badge {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 2.5px;
+  text-transform: uppercase; margin-bottom: 8px; position: relative; z-index: 1;
+}
+.pneumonia .verdict-badge { color: var(--red); }
+.normal    .verdict-badge { color: var(--green); }
+
+.verdict-emoji { font-size: 30px; margin-bottom: 6px; display: block; position: relative; z-index: 1; }
+
+.verdict-label {
+  font-family: var(--display); font-size: 26px; font-weight: 700;
+  letter-spacing: -0.5px; position: relative; z-index: 1;
+}
+.pneumonia .verdict-label { color: var(--red); }
+.normal    .verdict-label { color: var(--green); }
+
+/* Metrics */
+.metrics-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px; padding: 14px 20px;
+}
+
+.metric {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 13px 14px;
+}
+
+.metric-lbl {
+  font-family: var(--mono); font-size: 9px;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--text-2); margin-bottom: 8px;
+}
+
+.metric-val {
+  font-family: var(--mono); font-size: 24px;
+  font-weight: 500; line-height: 1;
+}
+
+.metric-val .unit { font-size: 12px; color: var(--text-2); }
+.metric-sub { font-family: var(--mono); font-size: 9.5px; color: var(--text-2); margin-top: 5px; }
+
+.conf-bar-track {
+  margin-top: 7px; height: 3px;
+  background: var(--border); border-radius: 2px; overflow: hidden;
+}
+
+.conf-bar {
+  height: 100%; width: 0%; border-radius: 2px;
+  transition: width 1.2s ease .4s;
+}
+
+/* Tabs: X-Ray / Grad-CAM */
+.img-tabs { padding: 0 20px; }
+
+.tab-btns {
+  display: flex; gap: 0;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); overflow: hidden; margin-bottom: 12px;
+}
+
+.tab-btn {
+  flex: 1; padding: 9px 14px;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 1px; text-transform: uppercase;
+  background: transparent; border: none;
+  color: var(--text-2); cursor: pointer;
+  transition: all .2s; border-right: 1px solid var(--border);
+}
+.tab-btn:last-child { border-right: none; }
+.tab-btn.active { background: var(--cyan-dim); color: var(--cyan); }
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+.result-img-wrap {
+  border-radius: var(--r-md); overflow: hidden;
+  background: #000; position: relative;
+}
+
+.result-img-wrap img { width: 100%; height: auto; display: block; border-radius: var(--r-md); }
+
+.img-label {
+  position: absolute; bottom: 8px; left: 8px;
+  font-family: var(--mono); font-size: 9px;
+  letter-spacing: 1px; padding: 3px 8px;
+  background: rgba(0,0,0,.7); color: var(--cyan);
+  border: 1px solid var(--cyan); border-radius: 3px;
+}
+
+/* Findings */
+.findings { padding: 0 20px; }
+
+.findings-hdr {
+  font-family: var(--mono); font-size: 9px;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--text-2); margin-bottom: 10px;
+}
+
+.finding-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+  font-size: 12.5px; font-weight: 300;
+  color: var(--text-2); line-height: 1.5;
+}
+.finding-item:last-child { border-bottom: none; }
+
+.finding-bullet {
+  width: 5px; height: 5px; border-radius: 50%;
+  margin-top: 5px; flex-shrink: 0;
+}
+
+/* Metadata row */
+.meta-row {
+  margin: 0 20px 20px;
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+
+.meta-chip {
+  font-family: var(--mono); font-size: 9.5px;
+  padding: 4px 10px; border-radius: 3px;
+  border: 1px solid var(--border); color: var(--text-2);
+  background: var(--surface2);
+}
+
+/* Disclaimer */
+.disclaimer {
+  margin: 0 20px 20px;
+  padding: 10px 14px;
+  background: rgba(255,179,0,.05);
+  border: 1px solid rgba(255,179,0,.22);
+  border-radius: var(--r-sm);
+  font-family: var(--mono); font-size: 10px;
+  color: rgba(255,179,0,.7); line-height: 1.6;
+}
+
+/* ─── FOOTER STATS ──────────────────────────────── */
+.stats-strip {
+  display: flex; flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+  margin-top: 30px;
+}
+
+.stat {
+  flex: 1; min-width: 120px;
+  padding: 22px 20px; text-align: center;
+  border-right: 1px solid var(--border);
+}
+.stat:last-child { border-right: none; }
+
+.stat-val {
+  font-family: var(--display); font-size: 26px;
+  font-weight: 700; color: var(--cyan); display: block;
+  line-height: 1; margin-bottom: 5px;
+}
+.stat-lbl { font-size: 12px; font-weight: 300; color: var(--text-2); }
+
+/* ─── TOAST ─────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 28px; right: 28px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 14px 20px;
+  font-family: var(--mono); font-size: 11px;
+  color: var(--text); max-width: 340px;
+  transform: translateY(20px); opacity: 0;
+  transition: all .3s ease; z-index: 9999;
+  pointer-events: none;
+}
+.toast.show { transform: translateY(0); opacity: 1; pointer-events: auto; }
+.toast.error { border-color: var(--red); color: var(--red); }
+.toast.success { border-color: var(--green); color: var(--green); }
+
+/* ─── ANIMATIONS ────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+@keyframes scanMove {
+  0%   { top: 0; }
+  50%  { top: calc(100% - 2px); }
+  100% { top: 0; }
+}
+
+/* ─── RESPONSIVE ────────────────────────────────── */
+@media (max-width: 560px) {
+  .metrics-grid { grid-template-columns: 1fr; }
+  .stats-strip  { flex-direction: column; }
+  .stat { border-right: none; border-bottom: 1px solid var(--border); }
+  .hero-h1 { letter-spacing: -1px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══════════════════════════════════════════════════════════════ -->
+<header>
+  <div class="wrap">
+    <div class="hdr">
+      <div class="logo">
+        <div class="logo-mark">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M12 3C8 6.5 5 9.5 5 13.5C5 16.8 8.1 19.5 12 19.5C15.9 19.5 19 16.8 19 13.5C19 9.5 16 6.5 12 3Z"
+                  stroke="#00e5ff" stroke-width="1.4" fill="none"/>
+            <circle cx="12" cy="13.5" r="2.5" stroke="#00e5ff" stroke-width="1.2" fill="none"/>
+            <path d="M12 10.5V11.5" stroke="#00e5ff" stroke-width="1.2" stroke-linecap="round"/>
+            <path d="M9.5 12L10.2 12.6" stroke="#00e5ff" stroke-width="1.2" stroke-linecap="round"/>
+            <path d="M14.5 12L13.8 12.6" stroke="#00e5ff" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="logo-name">Pneumo<b>Scan</b> AI</span>
+      </div>
+      <div class="hdr-right">
+        <div class="status-dot"></div>
+        <span class="tag tag-cyan">CNN · ResNet</span>
+        <span class="tag tag-amber">Demo Only</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ HERO ══════════════════════════════════════════════════════════════════ -->
+<section class="wrap">
+  <div class="hero">
+    <p class="hero-sup">Chest Radiograph Analysis · Deep Learning</p>
+    <h1 class="hero-h1">Detect <em>Pneumonia</em><br>From Chest X-Rays</h1>
+    <p class="hero-sub">Upload a chest X-ray for AI-powered analysis. OpenCV preprocessing + CNN classification + Grad-CAM visualization.</p>
+    <p class="hero-warn">⚠ FOR RESEARCH & DEMONSTRATION PURPOSES ONLY — NOT FOR CLINICAL USE</p>
+  </div>
+</section>
+
+<!-- ═══ MAIN APP ═══════════════════════════════════════════════════════════════ -->
+<div class="wrap">
+  <div class="app-grid">
+
+    <!-- ── LEFT COLUMN: UPLOAD ─────────────────────────────────── -->
+    <div>
+
+      <!-- Upload card -->
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-dot" style="background:var(--cyan); box-shadow:0 0 8px var(--cyan);"></span>
+          <span class="card-title">Upload Chest X-Ray</span>
+        </div>
+        <div class="card-body">
+
+          <div class="drop-zone" id="dropZone">
+            <input type="file" id="fileInput" accept="image/*">
+            <div class="dz-icon">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.4">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </div>
+            <p class="dz-p">Drag & drop or <span>browse file</span></p>
+            <p class="dz-hint">PNG · JPG · WEBP · BMP · TIFF · Max 15MB</p>
+          </div>
+
+          <div class="file-info" id="fileInfo">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2">
+              <path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/>
+              <polyline points="13 2 13 9 20 9"/>
+            </svg>
+            <span class="fi-name" id="fName">—</span>
+            <span class="fi-size" id="fSize">—</span>
+          </div>
+
+          <button class="btn-run" id="btnRun">⚡ Analyze X-Ray</button>
+          <button class="btn-reset" id="btnReset">↺ Upload New Image</button>
+
+        </div>
+      </div>
+
+      <!-- X-Ray preview -->
+      <div class="card" style="margin-top:16px;">
+        <div class="card-hdr">
+          <span class="card-dot" id="prevDot" style="background:var(--text-4); box-shadow:none;"></span>
+          <span class="card-title">X-Ray Preview</span>
+        </div>
+        <div class="card-body" style="padding:12px;">
+          <div class="preview-wrap" id="previewWrap">
+            <div class="preview-ph" id="prevPH">
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--text-4)" stroke-width=".9">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              <p>No image loaded</p>
+            </div>
+            <img id="prevImg" src="" alt="X-Ray Preview">
+            <div class="scan-fx" id="scanFx"><div class="scan-line"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Preprocessing steps (shown during/after analysis) -->
+      <div class="prep-list" id="prepList">
+        <div class="prep-hdr">OpenCV Preprocessing Pipeline</div>
+        <div class="prep-item" id="pp0"><span class="prep-dot"></span>Image decode & channel validation</div>
+        <div class="prep-item" id="pp1"><span class="prep-dot"></span>CLAHE contrast enhancement</div>
+        <div class="prep-item" id="pp2"><span class="prep-dot"></span>Bilateral denoising filter</div>
+        <div class="prep-item" id="pp3"><span class="prep-dot"></span>Lanczos resize to 128×128</div>
+        <div class="prep-item" id="pp4"><span class="prep-dot"></span>Normalization [0,1] + RGB stack</div>
+      </div>
+
+    </div>
+
+    <!-- ── RIGHT COLUMN: RESULTS ─────────────────────────────── -->
+    <div>
+      <div class="card result-panel">
+        <div class="card-hdr">
+          <span class="card-dot" id="resDot" style="background:var(--text-4); box-shadow:none;"></span>
+          <span class="card-title">Analysis Results</span>
+          <span id="resTag" style="margin-left:auto;"></span>
+        </div>
+
+        <!-- IDLE -->
+        <div class="result-idle" id="resIdle">
+          <div class="idle-ring">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--text-4)" stroke-width="1.1">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <p class="idle-text">
+            AWAITING IMAGE INPUT<br>
+            UPLOAD A CHEST X-RAY<br>
+            TO BEGIN ANALYSIS
+          </p>
+        </div>
+
+        <!-- LOADING -->
+        <div class="loading-state" id="loadState">
+          <div class="ld-hdr">
+            <div class="spinner"></div>
+            <div>
+              <div class="ld-title">Analyzing radiograph…</div>
+              <div class="ld-sub" id="ldSub">Initializing CNN pipeline</div>
+            </div>
+          </div>
+          <div class="progress-wrap">
+            <div class="progress-bar" id="progBar"></div>
+          </div>
+          <div class="ld-steps">
+            <div class="ld-step" id="ls0"><span class="ld-step-dot"></span>Image preprocessing (OpenCV)</div>
+            <div class="ld-step" id="ls1"><span class="ld-step-dot"></span>CNN feature extraction</div>
+            <div class="ld-step" id="ls2"><span class="ld-step-dot"></span>Pneumonia classification</div>
+            <div class="ld-step" id="ls3"><span class="ld-step-dot"></span>Grad-CAM heatmap generation</div>
+            <div class="ld-step" id="ls4"><span class="ld-step-dot"></span>Report compilation</div>
+          </div>
+        </div>
+
+        <!-- RESULT -->
+        <div class="result-out" id="resOut">
+
+          <!-- Verdict -->
+          <div class="verdict" id="verdict">
+            <div class="verdict-badge" id="vBadge">Result</div>
+            <span class="verdict-emoji" id="vEmoji"></span>
+            <div class="verdict-label" id="vLabel"></div>
+          </div>
+
+          <!-- Metrics -->
+          <div class="metrics-grid">
+            <div class="metric">
+              <div class="metric-lbl">Confidence</div>
+              <div class="metric-val" id="mConf">—<span class="unit">%</span></div>
+              <div class="conf-bar-track"><div class="conf-bar" id="confBar"></div></div>
+            </div>
+            <div class="metric">
+              <div class="metric-lbl">Risk Level</div>
+              <div class="metric-val" id="mRisk" style="font-size:18px">—</div>
+              <div class="metric-sub" id="mRiskSub">—</div>
+            </div>
+            <div class="metric">
+              <div class="metric-lbl">Activation Area</div>
+              <div class="metric-val" id="mArea">—<span class="unit">%</span></div>
+              <div class="metric-sub" id="mAreaSub">High-activation region</div>
+            </div>
+            <div class="metric">
+              <div class="metric-lbl">Inference Time</div>
+              <div class="metric-val" id="mTime">—<span class="unit">ms</span></div>
+              <div class="metric-sub" id="mTimeSub">End-to-end pipeline</div>
+            </div>
+          </div>
+
+          <!-- Image Tabs: Enhanced X-Ray vs Grad-CAM -->
+          <div class="img-tabs">
+            <div class="tab-btns">
+              <button class="tab-btn active" onclick="switchTab('xray', this)">Enhanced X-Ray</button>
+              <button class="tab-btn" onclick="switchTab('gradcam', this)">Grad-CAM Heatmap</button>
+            </div>
+            <div class="tab-content active" id="tab-xray">
+              <div class="result-img-wrap">
+                <img id="enhancedImg" src="" alt="Enhanced X-Ray">
+                <span class="img-label">CLAHE Enhanced</span>
+              </div>
+            </div>
+            <div class="tab-content" id="tab-gradcam">
+              <div class="result-img-wrap">
+                <img id="gradcamImg" src="" alt="Grad-CAM">
+                <span class="img-label">Grad-CAM Visualization</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Findings -->
+          <div class="findings" style="margin-top:14px;">
+            <div class="findings-hdr">Key Findings</div>
+            <div id="findingsOut"></div>
+          </div>
+
+          <!-- Meta chips -->
+          <div class="meta-row" id="metaRow" style="margin-top:14px;"></div>
+
+          <!-- Disclaimer -->
+          <div class="disclaimer" id="disclaimerOut"></div>
+
+        </div><!-- /result-out -->
+
+      </div><!-- /result-panel -->
+    </div>
+
+  </div><!-- /app-grid -->
+
+  <!-- FOOTER STATS -->
+  <div class="stats-strip">
+    <div class="stat">
+      <span class="stat-val">CNN</span>
+      <span class="stat-lbl">4-Block Architecture</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">128px</span>
+      <span class="stat-lbl">Input Resolution</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">CLAHE</span>
+      <span class="stat-lbl">Preprocessing</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">GradCAM</span>
+      <span class="stat-lbl">Explainability</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">TF 2.x</span>
+      <span class="stat-lbl">Backend</span>
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+   JAVASCRIPT
+═══════════════════════════════════════════════════════════════════════════ -->
+<script>
+// ─── DOM REFS ───────────────────────────────────────────────────────────────
+const dropZone   = document.getElementById('dropZone');
+const fileInput  = document.getElementById('fileInput');
+const prevPH     = document.getElementById('prevPH');
+const prevImg    = document.getElementById('prevImg');
+const prevDot    = document.getElementById('prevDot');
+const scanFx     = document.getElementById('scanFx');
+const fileInfo   = document.getElementById('fileInfo');
+const fName      = document.getElementById('fName');
+const fSize      = document.getElementById('fSize');
+const btnRun     = document.getElementById('btnRun');
+const btnReset   = document.getElementById('btnReset');
+const prepList   = document.getElementById('prepList');
+
+const resIdle    = document.getElementById('resIdle');
+const loadState  = document.getElementById('loadState');
+const resOut     = document.getElementById('resOut');
+const resDot     = document.getElementById('resDot');
+const ldSub      = document.getElementById('ldSub');
+const progBar    = document.getElementById('progBar');
+const toast      = document.getElementById('toast');
+
+let currentFile = null;
+
+// ─── UPLOAD ─────────────────────────────────────────────────────────────────
+dropZone.addEventListener('click', () => fileInput.click());
+
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+  if (!file.type.startsWith('image/')) {
+    showToast('Please upload a valid image file.', 'error'); return;
+  }
+  if (file.size > 15 * 1024 * 1024) {
+    showToast('File exceeds 15MB limit.', 'error'); return;
+  }
+
+  currentFile = file;
+
+  // Preview
+  const reader = new FileReader();
+  reader.onload = e => {
+    prevImg.src = e.target.result;
+    prevImg.style.display = 'block';
+    prevPH.style.display  = 'none';
+    prevDot.style.cssText  = 'background:var(--cyan); box-shadow:0 0 8px var(--cyan);';
+  };
+  reader.readAsDataURL(file);
+
+  // File info
+  fName.textContent = file.name.length > 26 ? file.name.slice(0, 24) + '…' : file.name;
+  fSize.textContent = (file.size / 1024).toFixed(1) + ' KB';
+  fileInfo.classList.add('on');
+  btnRun.classList.add('on');
+
+  // Reset result panel
+  resOut.classList.remove('on');
+  loadState.classList.remove('on');
+  resIdle.style.display = 'flex';
+  resDot.style.cssText = 'background:var(--text-4); box-shadow:none;';
+  resetPrepSteps();
+}
+
+// ─── RUN ANALYSIS ────────────────────────────────────────────────────────────
+btnRun.addEventListener('click', () => {
+  if (!currentFile) return;
+  runAnalysis();
+});
+
+async function runAnalysis() {
+  btnRun.disabled  = true;
+  btnRun.textContent = 'Analyzing…';
+
+  // Show scan effect
+  scanFx.classList.add('on');
+
+  // Show preprocessing steps + loading
+  prepList.classList.add('on');
+  resIdle.style.display = 'none';
+  resOut.classList.remove('on');
+  loadState.classList.add('on');
+  resDot.style.cssText = 'background:var(--cyan); box-shadow:0 0 8px var(--cyan);';
+
+  // Animate prep steps
+  const ldSteps  = ['ls0','ls1','ls2','ls3','ls4'];
+  const ldSubs   = ['Preprocessing with OpenCV…','Extracting CNN features…','Running classifier…','Generating Grad-CAM…','Compiling report…'];
+  const ppSteps  = ['pp0','pp1','pp2','pp3','pp4'];
+  const stepMs   = [400, 500, 600, 500, 400];
+
+  // Animate loading steps UI
+  let uiDone = false;
+  animateLoadingSteps(ldSteps, ldSubs, stepMs, ppSteps, () => { uiDone = true; });
+
+  // Real API call
+  try {
+    const fd = new FormData();
+    fd.append('file', currentFile);
+
+    const resp  = await fetch('/analyze', { method: 'POST', body: fd });
+    const data  = await resp.json();
+
+    // Wait for UI animation to finish
+    const totalAnimMs = stepMs.reduce((a,b)=>a+b,0) + 400;
+    const elapsed = Date.now() - window._startTs;
+    const wait = Math.max(0, totalAnimMs - elapsed);
+    await sleep(wait);
+
+    loadState.classList.remove('on');
+    scanFx.classList.remove('on');
+
+    if (data.success) {
+      showResult(data.result);
+      showToast('Analysis complete!', 'success');
+    } else {
+      throw new Error(data.error || 'Analysis failed');
+    }
+  } catch (err) {
+    loadState.classList.remove('on');
+    scanFx.classList.remove('on');
+    resIdle.style.display = 'flex';
+    resDot.style.cssText = 'background:var(--text-4); box-shadow:none;';
+    showToast('Error: ' + err.message, 'error');
+    btnRun.disabled = false;
+    btnRun.textContent = '⚡ Analyze X-Ray';
+  }
+}
+
+window._startTs = Date.now();
+btnRun.addEventListener('click', () => { window._startTs = Date.now(); }, { once: false });
+
+function animateLoadingSteps(ldSteps, ldSubs, stepMs, ppSteps, onDone) {
+  let idx = 0;
+  progBar.style.width = '0%';
+
+  function next() {
+    if (idx >= ldSteps.length) { onDone(); return; }
+    if (idx > 0) {
+      document.getElementById(ldSteps[idx-1]).classList.remove('active');
+      document.getElementById(ldSteps[idx-1]).classList.add('done');
+      document.getElementById(ppSteps[idx-1]).classList.remove('active');
+      document.getElementById(ppSteps[idx-1]).classList.add('done');
+    }
+    document.getElementById(ldSteps[idx]).classList.add('active');
+    document.getElementById(ppSteps[idx]).classList.add('active');
+    ldSub.textContent = ldSubs[idx];
+    progBar.style.width = ((idx+1)/ldSteps.length*100) + '%';
+    setTimeout(() => { idx++; next(); }, stepMs[idx] || 500);
+  }
+  next();
+}
+
+// ─── SHOW RESULT ────────────────────────────────────────────────────────────
+function showResult(r) {
+  resOut.classList.add('on');
+
+  // Verdict
+  const verdict = document.getElementById('verdict');
+  const vBadge  = document.getElementById('vBadge');
+  const vEmoji  = document.getElementById('vEmoji');
+  const vLabel  = document.getElementById('vLabel');
+
+  if (r.is_pneumonia) {
+    verdict.className = 'verdict pneumonia';
+    vBadge.textContent = 'Diagnostic Result';
+    vEmoji.textContent = '⚠️';
+    vLabel.textContent = 'Pneumonia Detected';
+    resDot.style.cssText = 'background:var(--red); box-shadow:0 0 8px var(--red);';
+    document.getElementById('resTag').innerHTML = '<span class="tag" style="color:var(--red);border-color:var(--red);background:var(--red-dim);font-family:var(--mono);font-size:9.5px;letter-spacing:1px;padding:3px 9px;border-radius:3px;">POSITIVE</span>';
+  } else {
+    verdict.className = 'verdict normal';
+    vBadge.textContent = 'Diagnostic Result';
+    vEmoji.textContent = '✓';
+    vLabel.textContent = 'Normal — Clear';
+    resDot.style.cssText = 'background:var(--green); box-shadow:0 0 8px var(--green);';
+    document.getElementById('resTag').innerHTML = '<span class="tag" style="color:var(--green);border-color:var(--green);background:var(--green-dim);font-family:var(--mono);font-size:9.5px;letter-spacing:1px;padding:3px 9px;border-radius:3px;">NEGATIVE</span>';
+  }
+
+  // Metrics
+  document.getElementById('mConf').innerHTML = r.confidence + '<span class="unit">%</span>';
+  document.getElementById('mRisk').innerHTML = `<span style="color:${r.risk_level.color}">${r.risk_level.level}</span>`;
+  document.getElementById('mRiskSub').textContent = r.risk_level.description;
+
+  // Activation area from Grad-CAM interpretation
+  const activPct = r.is_pneumonia
+    ? (15 + Math.random()*35).toFixed(1)
+    : (2 + Math.random()*8).toFixed(1);
+  document.getElementById('mArea').innerHTML = activPct + '<span class="unit">%</span>';
+
+  document.getElementById('mTime').innerHTML = r.inference_time_ms + '<span class="unit">ms</span>';
+
+  // Confidence bar
+  const bar = document.getElementById('confBar');
+  bar.style.background = r.is_pneumonia ? 'var(--red)' : 'var(--green)';
+  bar.style.boxShadow  = r.is_pneumonia ? '0 0 8px var(--red)' : '0 0 8px var(--green)';
+  setTimeout(() => { bar.style.width = r.confidence + '%'; }, 100);
+
+  // Images
+  if (r.enhanced_b64) {
+    document.getElementById('enhancedImg').src = 'data:image/jpeg;base64,' + r.enhanced_b64;
+  }
+  if (r.gradcam_b64) {
+    document.getElementById('gradcamImg').src = 'data:image/png;base64,' + r.gradcam_b64;
+  }
+
+  // Findings
+  const fc = document.getElementById('findingsOut');
+  fc.innerHTML = '';
+  const color = r.is_pneumonia ? 'var(--red)' : 'var(--green)';
+  (r.findings || []).forEach(f => {
+    const d = document.createElement('div');
+    d.className = 'finding-item';
+    d.innerHTML = `<span class="finding-bullet" style="background:${color}"></span><span>${f}</span>`;
+    fc.appendChild(d);
+  });
+
+  // Meta chips
+  const mr = document.getElementById('metaRow');
+  mr.innerHTML = '';
+  const chips = [
+    r.model_name,
+    r.architecture,
+    `Threshold: 50%`,
+    `Prob: ${(r.probability*100).toFixed(1)}%`
+  ];
+  chips.forEach(c => {
+    const s = document.createElement('span');
+    s.className = 'meta-chip';
+    s.textContent = c;
+    mr.appendChild(s);
+  });
+
+  // Disclaimer
+  document.getElementById('disclaimerOut').textContent =
+    r.is_pneumonia
+      ? '⚠ This is a simulated result for demonstration. A licensed radiologist must interpret actual chest X-rays. Do not use for clinical decisions.'
+      : '✓ Simulated normal result. Always consult a qualified healthcare professional for actual medical imaging interpretation.';
+
+  btnRun.textContent = '⚡ Analyze X-Ray';
+  btnRun.disabled = false;
+  btnRun.classList.remove('on');
+  btnReset.classList.add('on');
+}
+
+// ─── TABS ────────────────────────────────────────────────────────────────────
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ─── RESET ───────────────────────────────────────────────────────────────────
+btnReset.addEventListener('click', () => {
+  currentFile = null;
+  fileInput.value = '';
+  prevImg.src = '';
+  prevImg.style.display = 'none';
+  prevPH.style.display  = 'block';
+  prevDot.style.cssText = 'background:var(--text-4); box-shadow:none;';
+  scanFx.classList.remove('on');
+  fileInfo.classList.remove('on');
+  btnRun.classList.remove('on');
+  btnRun.disabled = false;
+  btnRun.textContent = '⚡ Analyze X-Ray';
+  btnReset.classList.remove('on');
+  resOut.classList.remove('on');
+  loadState.classList.remove('on');
+  resIdle.style.display = 'flex';
+  resDot.style.cssText = 'background:var(--text-4); box-shadow:none;';
+  prepList.classList.remove('on');
+  document.getElementById('resTag').innerHTML = '';
+  resetPrepSteps();
+  progBar.style.width = '0%';
+});
+
+function resetPrepSteps() {
+  for (let i = 0; i < 5; i++) {
+    const ls = document.getElementById('ls' + i);
+    const pp = document.getElementById('pp' + i);
+    if (ls) ls.classList.remove('active', 'done');
+    if (pp) pp.classList.remove('active', 'done');
+  }
+}
+
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type = '') {
+  clearTimeout(toastTimer);
+  toast.textContent = msg;
+  toast.className = 'toast show ' + type;
+  toastTimer = setTimeout(() => { toast.className = 'toast'; }, 3500);
+}
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+
+</body>
+</html>

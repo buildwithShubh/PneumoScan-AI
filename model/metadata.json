@@ -1,0 +1,20 @@
+{
+  "model_name": "PneumoNet",
+  "architecture": "Custom 4-Block CNN",
+  "input_shape": [
+    128,
+    128,
+    3
+  ],
+  "classes": [
+    "Normal",
+    "Pneumonia"
+  ],
+  "threshold": 0.5,
+  "grad_cam_layer": "conv4_gradcam",
+  "version": "2.0.0",
+  "trained_on": "Kaggle Chest X-Ray Dataset",
+  "train_samples": 5216,
+  "test_accuracy": 83.49,
+  "test_auc": 0.9494
+}
