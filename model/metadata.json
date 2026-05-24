@@ -10,11 +10,11 @@
     "Normal",
     "Pneumonia"
   ],
-  "threshold": 0.5,
+  "threshold": 0.3,
   "grad_cam_layer": "conv4_gradcam",
   "version": "2.0.0",
   "trained_on": "Kaggle Chest X-Ray Dataset",
   "train_samples": 5216,
-  "test_accuracy": 83.49,
-  "test_auc": 0.9494
+  "test_accuracy": 87.98,
+  "test_auc": 0.9454
 }

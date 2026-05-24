@@ -175,7 +175,7 @@ def predict(image_bytes: bytes) -> dict:
 
     model, meta = get_model()
     img_size = tuple(meta["input_shape"][:2])
-    threshold = meta.get("threshold", 0.5)
+    threshold = meta.get("threshold", 0.3)
 
     # 1. Preprocess
     preprocessed = preprocess_xray(image_bytes, target_size=img_size)

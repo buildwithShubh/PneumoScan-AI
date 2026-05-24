@@ -26,7 +26,8 @@ print("GPU available:", tf.config.list_physical_devices('GPU'))
 IMG_SIZE    = 128        # image resize dimension
 BATCH_SIZE  = 32         # images per batch
 EPOCHS      = 20         # max training epochs
-LR          = 1e-3       # learning rate
+LR = 3e-4   # slower learning = better balance
+# LR          = 1e-3       # learning rate
 
 TRAIN_DIR   = "chest_xray/train"
 VAL_DIR     = "chest_xray/val"
@@ -92,23 +93,32 @@ total = train_gen.samples
 n_normal    = len(os.listdir(os.path.join(TRAIN_DIR, 'NORMAL')))
 n_pneumonia = len(os.listdir(os.path.join(TRAIN_DIR, 'PNEUMONIA')))
 
-weight_normal    = total / (2 * n_normal)
-weight_pneumonia = total / (2 * n_pneumonia)
+# weight_normal    = total / (2 * n_normal)
+# weight_pneumonia = total / (2 * n_pneumonia)
+
+# class_weights = {0: weight_normal, 1: weight_pneumonia}
+weight_normal    = (total / (2 * n_normal)) * 1.5   # Normal ko extra boost
+weight_pneumonia = (total / (2 * n_pneumonia))
 
 class_weights = {0: weight_normal, 1: weight_pneumonia}
-print(f"\nClass weights: Normal={weight_normal:.2f}, Pneumonia={weight_pneumonia:.2f}")
+print(f"Class weights: Normal={weight_normal:.2f}, Pneumonia={weight_pneumonia:.2f}")
+# print(f"\nClass weights: Normal={weight_normal:.2f}, Pneumonia={weight_pneumonia:.2f}")
 
 # ─── MODEL ARCHITECTURE ──────────────────────────────
 def build_pneumonet(img_size=128):
     inputs = tf.keras.Input(shape=(img_size, img_size, 3), name="xray_input")
 
     # Block 1
+    # x = layers.Conv2D(32, 3, padding='same', name="conv1")(inputs)
+    # x = layers.BatchNormalization()(x)
+    # x = layers.Activation('relu')(x)
+    # x = layers.MaxPooling2D(2)(x)
+    # x = layers.Dropout(0.25)(x)
     x = layers.Conv2D(32, 3, padding='same', name="conv1")(inputs)
     x = layers.BatchNormalization()(x)
     x = layers.Activation('relu')(x)
     x = layers.MaxPooling2D(2)(x)
-    x = layers.Dropout(0.25)(x)
-
+    x = layers.Dropout(0.15)(x)
     # Block 2
     x = layers.Conv2D(64, 3, padding='same', name="conv2")(x)
     x = layers.BatchNormalization()(x)
@@ -157,17 +167,30 @@ model.compile(
 # ─── CALLBACKS ───────────────────────────────────────
 callbacks = [
     # Save best model automatically
+    # ModelCheckpoint(
+    #     filepath=os.path.join(MODEL_DIR, 'pneumonet.keras'),
+    #     monitor='val_auc',
+    #     save_best_only=True,
+    #     mode='max',
+    #     verbose=1
+    # ),
+    # # Stop early if no improvement for 5 epochs
+    # EarlyStopping(
+    #     monitor='val_auc',
+    #     patience=5,
+    #     restore_best_weights=True,
+    #     verbose=1
+    # ),
     ModelCheckpoint(
         filepath=os.path.join(MODEL_DIR, 'pneumonet.keras'),
-        monitor='val_auc',
+        monitor='val_loss',
         save_best_only=True,
-        mode='max',
+        mode='min',
         verbose=1
     ),
-    # Stop early if no improvement for 5 epochs
     EarlyStopping(
-        monitor='val_auc',
-        patience=5,
+        monitor='val_loss',
+        patience=6,
         restore_best_weights=True,
         verbose=1
     ),
@@ -230,7 +253,7 @@ meta = {
     "architecture": "Custom 4-Block CNN",
     "input_shape": [IMG_SIZE, IMG_SIZE, 3],
     "classes": ["Normal", "Pneumonia"],
-    "threshold": 0.5,
+    "threshold": 0.3,
     "grad_cam_layer": "conv4_gradcam",
     "version": "2.0.0",
     "trained_on": "Kaggle Chest X-Ray Dataset",

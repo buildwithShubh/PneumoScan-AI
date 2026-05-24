@@ -150,3 +150,30 @@ All medical imaging must be interpreted by licensed radiologists and physicians.
 **Developer** : Shubham Gupta 
 Guthub: https://github.com/buildwithShubh
 Repository :
+
+
+
+# Demo Screenshots
+
+## Home Interface
+
+![Home UI](Screenshot/ModelUI.png )
+
+---
+## Prediction 
+![Prediction] (![alt text](Screenshot/Predict.png))
+## Prediction Result
+
+![Prediction](Screenshot/ModelPrediction.png )
+![Prediction] (![alt text](Screenshot/ModelPridiction.png))
+---
+
+## Grad-CAM Visualization
+
+![GradCAM](Screenshot/GrayScale.png  )
+
+---
+
+## Training Curves
+
+![Training](Screenshot/TrainingCurves.png )
